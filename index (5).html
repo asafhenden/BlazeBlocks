@@ -1,0 +1,759 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="BlazeBlocks">
+<title>BlazeBlocks</title>
+<style>
+  :root {
+    --hucre-boyutu: 48px;
+    --hucre-bosluk: 3px;
+    --mini-hucre-boyutu: 22px;
+  }
+
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+
+  body {
+    background: linear-gradient(160deg, #6fc3f7, #3d8bd4);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    color: #f4f1ea;
+    gap: 14px;
+    overscroll-behavior: none;
+    padding: 10px;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .score-panel {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    background: #1f1d3d;
+    padding: 10px 28px;
+    border-radius: 12px;
+  }
+
+  .score-label {
+    font-size: 0.85rem;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: #9aa0c9;
+  }
+
+  .score-value {
+    font-size: 1.8rem;
+    font-weight: bold;
+    color: #ffd166;
+  }
+
+  .board {
+    display: grid;
+    grid-template-columns: repeat(9, var(--hucre-boyutu));
+    grid-template-rows: repeat(9, var(--hucre-boyutu));
+    gap: var(--hucre-bosluk);
+    background: #1f1d3d;
+    padding: 8px;
+    border-radius: 12px;
+  }
+
+  .cell {
+    background: #2c2a52;
+    border-radius: 4px;
+    transition: background 0.1s ease;
+  }
+
+  .cell.filled {
+    background: #ff6b6b;
+  }
+
+  .cell.preview-valid {
+    background: #8ee686;
+  }
+
+  .cell.preview-invalid {
+    background: #ff8a8a;
+  }
+
+  .combo-badge {
+    background: #ffd166;
+    color: #1f1d3d;
+    font-weight: bold;
+    font-size: 0.95rem;
+    padding: 4px 12px;
+    border-radius: 8px;
+    display: none;
+  }
+
+  .combo-badge.gosteriliyor {
+    display: inline-block;
+    animation: comboNabiz 0.3s ease;
+  }
+
+  @keyframes comboNabiz {
+    0% { transform: scale(0.5); }
+    60% { transform: scale(1.2); }
+    100% { transform: scale(1); }
+  }
+
+  @keyframes patla {
+    0% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.2); opacity: 0.7; background: #fff5cc; }
+    100% { transform: scale(0.5); opacity: 0; }
+  }
+
+  .cell.patlayacak {
+    animation: patla 0.25s ease forwards;
+  }
+
+  .puan-popup {
+    position: fixed;
+    transform: translate(-50%, -50%);
+    font-size: 1.9rem;
+    font-weight: 900;
+    pointer-events: none;
+    z-index: 2000;
+    background: linear-gradient(180deg, #fff3b0, #ffb347, #ff5e3a);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    filter: drop-shadow(0 0 10px rgba(255, 94, 58, 0.7));
+    animation: puanUcus 0.9s ease forwards;
+  }
+
+  @keyframes puanUcus {
+    0% { transform: translate(-50%, -50%) scale(0.5); opacity: 0; }
+    20% { transform: translate(-50%, -50%) scale(1.3); opacity: 1; }
+    100% { transform: translate(-50%, -95px) scale(1); opacity: 0; }
+  }
+
+  .tray {
+    display: flex;
+    gap: 20px;
+    background: #1f1d3d;
+    padding: 16px 24px;
+    border-radius: 12px;
+  }
+
+  .tray-slot {
+    min-width: calc(var(--mini-hucre-boyutu) * 3 + 14px);
+    min-height: calc(var(--mini-hucre-boyutu) * 3 + 14px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: grab;
+    touch-action: none;
+    -webkit-tap-highlight-color: transparent; /* dokununca gelen gri vurguyu kapat */
+    -webkit-touch-callout: none;              /* uzun basınca açılan iOS menüsünü kapat */
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  @keyframes parcaGelisi {
+    0% { transform: scale(0.3); opacity: 0; }
+    100% { transform: scale(1); opacity: 1; }
+  }
+
+  .tray-slot.yeni-parca {
+    animation: parcaGelisi 0.2s ease;
+  }
+
+  .mini-cell {
+    border-radius: 3px;
+  }
+
+  .restart-button {
+    background: #ff6b6b;
+    color: #1f1d3d;
+    font-weight: bold;
+    font-size: 0.9rem;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    padding: 12px 30px;
+    border: none;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: transform 0.1s ease, background 0.1s ease;
+  }
+
+  .restart-button:hover {
+    background: #ff8585;
+  }
+
+  .restart-button:active {
+    transform: scale(0.95);
+  }
+</style>
+</head>
+<body>
+
+  <div class="score-panel">
+    <span class="score-label">Skor</span>
+    <span class="score-value" id="score">0</span>
+    <span class="combo-badge" id="combo-badge"></span>
+  </div>
+
+  <div class="board" id="board"></div>
+
+  <div class="tray" id="tray">
+    <div class="tray-slot" id="slot-0"></div>
+    <div class="tray-slot" id="slot-1"></div>
+    <div class="tray-slot" id="slot-2"></div>
+  </div>
+
+  <button class="restart-button" id="restart-button">Yeniden Başlat</button>
+
+  <script>
+    // ===== 0) EKRANA GÖRE HÜCRE BOYUTUNU HESAPLA =====
+    // Telefon ekranları bilgisayardan çok daha dar/kısa. Hücreleri hep 48px
+    // sabit tutarsak, küçük ekranlarda tahta ekranın dışına taşar ve kaydırma
+    // gerekir. Bunun yerine: önce "ekranda ne kadar yer var?" diye ölçüyoruz,
+    // sonra ona göre en uygun hücre boyutunu kendimiz hesaplıyoruz.
+
+    let HUCRE_BOYUTU = 48;
+    const HUCRE_BOSLUK = 3;
+    let MINI_HUCRE_BOYUTU = 22;
+
+    function boyutlariHesapla() {
+      const genislik = window.innerWidth;
+      const yukseklik = window.innerHeight;
+
+      const kenarBosluk = 24;            // sayfanın sağında/solunda bırakılacak minimum boşluk
+      const digerArayuzYuksekligi = 230; // skor paneli + tepsi + buton + boşluklar için ayrılan tahmini yer
+
+      // Genişliğe göre sığabilecek en büyük hücre: 9 hücre + 8 aralık + tahta kenar boşluğu
+      const genislikSiniri = (genislik - kenarBosluk - 16 - 8 * HUCRE_BOSLUK) / 9;
+      // Yüksekliğe göre sığabilecek en büyük hücre
+      const yukseklikSiniri = (yukseklik - digerArayuzYuksekligi - 16 - 8 * HUCRE_BOSLUK) / 9;
+
+      let yeniBoyut = Math.floor(Math.min(genislikSiniri, yukseklikSiniri, 48));
+      yeniBoyut = Math.max(yeniBoyut, 24); // çok küçük ekranlarda da okunaksız küçülmesin
+
+      HUCRE_BOYUTU = yeniBoyut;
+      MINI_HUCRE_BOYUTU = Math.max(Math.round(yeniBoyut * 0.46), 14);
+
+      document.documentElement.style.setProperty('--hucre-boyutu', HUCRE_BOYUTU + 'px');
+      document.documentElement.style.setProperty('--mini-hucre-boyutu', MINI_HUCRE_BOYUTU + 'px');
+    }
+
+    boyutlariHesapla();
+    window.addEventListener('resize', boyutlariHesapla);
+    window.addEventListener('orientationchange', boyutlariHesapla);
+
+    // ===== 1) IZGARAYI OLUŞTUR (artık 2 boyutlu bir dizi olarak saklıyoruz) =====
+    // hucreDizisi[satir][sutun] dersek o hücrenin DOM elemanına ulaşabileceğiz.
+    // Bu, çakışma kontrolü yaparken hayat kurtaracak.
+
+    const board = document.getElementById('board');
+    const hucreDizisi = [];
+
+    for (let satir = 0; satir < 9; satir++) {
+      const satirDizisi = [];
+      for (let sutun = 0; sutun < 9; sutun++) {
+        const hucre = document.createElement('div');
+        hucre.classList.add('cell');
+        hucre.dataset.satir = satir;   // hücreye "ben hangi satırdayım" bilgisini etiketliyoruz
+        hucre.dataset.sutun = sutun;   // ve "hangi sütundayım" bilgisini
+        board.appendChild(hucre);
+        satirDizisi.push(hucre);
+      }
+      hucreDizisi.push(satirDizisi);
+    }
+
+    // ===== 2) SKOR =====
+
+    let skor = 0;
+    const skorElemani = document.getElementById('score');
+
+    function skoruGuncelle(eklenecekPuan) {
+      skor += eklenecekPuan;
+      skorElemani.textContent = skor;
+    }
+
+    // ----- KOMBO -----
+    // comboSayaci: art arda kaç hamlede satır/sütun patlattığımızı sayar.
+    // Bir hamlede HİÇ patlama olmazsa bu sayaç sıfırlanır.
+
+    let comboSayaci = 0;
+    const comboRozeti = document.getElementById('combo-badge');
+
+    function comboGoster(sayi) {
+      comboRozeti.textContent = 'x' + sayi + ' KOMBO';
+      comboRozeti.classList.remove('gosteriliyor');
+      requestAnimationFrame(function () {
+        comboRozeti.classList.add('gosteriliyor');
+      });
+    }
+
+    function comboGizle() {
+      comboRozeti.classList.remove('gosteriliyor');
+    }
+
+    // ===== 3) BLOK ŞEKİLLERİ =====
+
+    const sekiller = [
+      [[1]],
+      [[1, 1]],
+      [[1], [1]],
+      [[1, 1, 1]],
+      [[1], [1], [1]],
+      [[1, 1], [1, 1]],
+      [[1, 0], [1, 1]],
+      [[1, 1], [0, 1]],
+      [[1, 1, 1], [0, 1, 0]],
+    ];
+
+    function rastgeleSekilSec() {
+      const rastgeleIndex = Math.floor(Math.random() * sekiller.length);
+      return sekiller[rastgeleIndex];
+    }
+
+    // ----- RENKLER -----
+    // Her bloğa bu paletten rastgele bir renk atanacak.
+
+    const renkPaleti = [
+      '#ff9f43', // turuncu
+      '#22d3c4', // turkuaz
+      '#ffd23f', // sarı
+      '#3fae58', // yeşil
+      '#a76fe0', // mor
+    ];
+
+    function rastgeleRenkSec() {
+      const rastgeleIndex = Math.floor(Math.random() * renkPaleti.length);
+      return renkPaleti[rastgeleIndex];
+    }
+
+    // ===== 4) BİR ŞEKLİ ÇİZEN FONKSİYON =====
+    // Artık hücre boyutunu VE rengi parametre olarak alıyor: tepside küçük (22px),
+    // sürüklerken büyük (48px, tahtadaki hücrelerle aynı boy) çizebiliyoruz.
+
+    function sekilCiz(sekil, kutu, hucreBoyutu = 22, bosluk = 2, renk = '#ffd166') {
+      const satirSayisi = sekil.length;
+      const sutunSayisi = sekil[0].length;
+
+      kutu.style.display = 'grid';
+      kutu.style.gridTemplateColumns = `repeat(${sutunSayisi}, ${hucreBoyutu}px)`;
+      kutu.style.gridTemplateRows = `repeat(${satirSayisi}, ${hucreBoyutu}px)`;
+      kutu.style.gap = bosluk + 'px';
+
+      for (let satir = 0; satir < satirSayisi; satir++) {
+        for (let sutun = 0; sutun < sutunSayisi; sutun++) {
+          const miniHucre = document.createElement('div');
+          miniHucre.classList.add('mini-cell');
+          const deger = sekil[satir][sutun];
+          miniHucre.style.background = deger === 1 ? renk : 'transparent';
+          kutu.appendChild(miniHucre);
+        }
+      }
+    }
+
+    // ===== 5) TEPSİ DURUMU =====
+    // trayDurumu[i] = o slotun şu an tuttuğu { sekil, renk } çifti (ya da boşsa null)
+
+    const slotlar = [
+      document.getElementById('slot-0'),
+      document.getElementById('slot-1'),
+      document.getElementById('slot-2'),
+    ];
+    const trayDurumu = [null, null, null];
+
+    function tepsiyiDoldur() {
+      for (let i = 0; i < 3; i++) {
+        const sekil = rastgeleSekilSec();
+        const renk = rastgeleRenkSec();
+        trayDurumu[i] = { sekil: sekil, renk: renk };
+        slotlar[i].innerHTML = '';
+        sekilCiz(sekil, slotlar[i], MINI_HUCRE_BOYUTU, 2, renk);
+      }
+    }
+
+    // Sadece TEK bir slotu yeniler — diğer iki slot ne durumdaysa öyle kalır.
+    // Böylece bir blok yerleştirdiğin an, boşalan yere hemen yeni bir blok gelir,
+    // üçünü de bitirmeni beklemez.
+    function slotaYeniSekilVer(slotIndex) {
+      const yeniSekil = rastgeleSekilSec();
+      const yeniRenk = rastgeleRenkSec();
+      trayDurumu[slotIndex] = { sekil: yeniSekil, renk: yeniRenk };
+
+      const slotElemani = slotlar[slotIndex];
+      slotElemani.innerHTML = '';
+      sekilCiz(yeniSekil, slotElemani, MINI_HUCRE_BOYUTU, 2, yeniRenk);
+
+      // küçük bir "beliriş" animasyonu için class'ı tekrar tetikliyoruz
+      slotElemani.classList.remove('yeni-parca');
+      requestAnimationFrame(function () {
+        slotElemani.classList.add('yeni-parca');
+      });
+    }
+
+    // ===== 6) MOUSE / DOKUNMA KOORDİNATINI TEK FORMATTA OKUMA =====
+    // Bilgisayarda fare olayları clientX/clientY kullanır,
+    // telefonda dokunma olayları touches[0].clientX/clientY kullanır.
+    // Bu fonksiyon ikisini de aynı şekle çeviriyor, böylece tek kod hepsine çalışır.
+
+    function pointerKonumu(e) {
+      if (e.touches && e.touches.length > 0) {
+        return { x: e.touches[0].clientX, y: e.touches[0].clientY };
+      }
+      return { x: e.clientX, y: e.clientY };
+    }
+
+    // ===== 7) BİR YERLEŞİMİN GEÇERLİ OLUP OLMADIĞINI KONTROL ETME =====
+    // ankorSatir/ankorSutun, şeklin sol-üst köşesinin ızgarada hangi hücreye
+    // denk geleceğini gösteriyor. Şeklin her dolu (1) karesi için:
+    // ızgara dışına taşıyor mu? ya da orası zaten dolu mu? kontrol ediyoruz.
+
+    function yerlesimGecerliMi(sekil, ankorSatir, ankorSutun) {
+      for (let r = 0; r < sekil.length; r++) {
+        for (let c = 0; c < sekil[0].length; c++) {
+          if (sekil[r][c] === 1) {
+            const hedefSatir = ankorSatir + r;
+            const hedefSutun = ankorSutun + c;
+
+            if (hedefSatir < 0 || hedefSatir > 8 || hedefSutun < 0 || hedefSutun > 8) {
+              return false; // ızgaranın dışına taşıyor
+            }
+            if (hucreDizisi[hedefSatir][hedefSutun].classList.contains('filled')) {
+              return false; // orası zaten dolu
+            }
+          }
+        }
+      }
+      return true;
+    }
+
+    // ===== 8) ÖNİZLEME (yeşil/kırmızı vurgu) =====
+    // Performans için: her seferinde 81 hücreyi taramak yerine, az önce
+    // işaretlediğimiz hücreleri bir listede tutup sadece onları temizliyoruz.
+
+    let aktifOnizlemeHucreleri = [];
+
+    function onizlemeTemizle() {
+      aktifOnizlemeHucreleri.forEach(function (hucre) {
+        hucre.classList.remove('preview-valid', 'preview-invalid');
+      });
+      aktifOnizlemeHucreleri = [];
+    }
+
+    function onizlemeUygula(sekil, ankorSatir, ankorSutun, gecerli) {
+      const sinif = gecerli ? 'preview-valid' : 'preview-invalid';
+      for (let r = 0; r < sekil.length; r++) {
+        for (let c = 0; c < sekil[0].length; c++) {
+          if (sekil[r][c] === 1) {
+            const hedefSatir = ankorSatir + r;
+            const hedefSutun = ankorSutun + c;
+            if (hedefSatir >= 0 && hedefSatir <= 8 && hedefSutun >= 0 && hedefSutun <= 8) {
+              const hucre = hucreDizisi[hedefSatir][hedefSutun];
+              hucre.classList.add(sinif);
+              aktifOnizlemeHucreleri.push(hucre); // sonradan temizlemek için hatırla
+            }
+          }
+        }
+      }
+    }
+
+    // ===== 9) ŞEKLİ KALICI OLARAK YERLEŞTİRME =====
+
+    function sekliYerlestir(sekil, ankorSatir, ankorSutun, renk) {
+      for (let r = 0; r < sekil.length; r++) {
+        for (let c = 0; c < sekil[0].length; c++) {
+          if (sekil[r][c] === 1) {
+            const hucre = hucreDizisi[ankorSatir + r][ankorSutun + c];
+            hucre.classList.add('filled');
+            hucre.style.background = renk; // bloğun kendi rengini hücreye işle
+          }
+        }
+      }
+    }
+
+    // ===== 10) DOLU SATIR/SÜTUNLARI BULMA VE PATLATMA =====
+
+    function patlayacaklariBul() {
+      const doluSatirlar = [];
+      const doluSutunlar = [];
+
+      for (let satir = 0; satir < 9; satir++) {
+        let hepsiDolu = true;
+        for (let sutun = 0; sutun < 9; sutun++) {
+          if (!hucreDizisi[satir][sutun].classList.contains('filled')) {
+            hepsiDolu = false;
+            break;
+          }
+        }
+        if (hepsiDolu) doluSatirlar.push(satir);
+      }
+
+      for (let sutun = 0; sutun < 9; sutun++) {
+        let hepsiDolu = true;
+        for (let satir = 0; satir < 9; satir++) {
+          if (!hucreDizisi[satir][sutun].classList.contains('filled')) {
+            hepsiDolu = false;
+            break;
+          }
+        }
+        if (hepsiDolu) doluSutunlar.push(sutun);
+      }
+
+      return { satirlar: doluSatirlar, sutunlar: doluSutunlar };
+    }
+
+    function satirSutunPatlat(patlayanlar) {
+      const patlayacakHucreler = [];
+
+      patlayanlar.satirlar.forEach(function (satir) {
+        for (let sutun = 0; sutun < 9; sutun++) {
+          patlayacakHucreler.push(hucreDizisi[satir][sutun]);
+        }
+      });
+      patlayanlar.sutunlar.forEach(function (sutun) {
+        for (let satir = 0; satir < 9; satir++) {
+          patlayacakHucreler.push(hucreDizisi[satir][sutun]);
+        }
+      });
+
+      // önce animasyon class'ını ekle (görsel patlama efekti başlasın)
+      patlayacakHucreler.forEach(function (hucre) {
+        hucre.classList.add('patlayacak');
+      });
+
+      // animasyon bitince hücreleri gerçekten boşalt
+      setTimeout(function () {
+        patlayacakHucreler.forEach(function (hucre) {
+          hucre.classList.remove('filled', 'patlayacak');
+          hucre.style.background = ''; // rengi sıfırla, hücre eski boş rengine dönsün
+        });
+      }, 250);
+
+      return patlayacakHucreler; // popup'ı nereye koyacağımızı bilmek için bu listeyi geri veriyoruz
+    }
+
+    // Patlayan hücrelerin tam ortasında "+puan" yazısı belirip yukarı süzülerek kaybolur
+    function puanPopupGoster(puan, hucreler) {
+      let toplamX = 0;
+      let toplamY = 0;
+
+      hucreler.forEach(function (hucre) {
+        const kutu = hucre.getBoundingClientRect();
+        toplamX += kutu.left + kutu.width / 2;
+        toplamY += kutu.top + kutu.height / 2;
+      });
+
+      const merkezX = toplamX / hucreler.length;
+      const merkezY = toplamY / hucreler.length;
+
+      const popup = document.createElement('div');
+      popup.className = 'puan-popup';
+      popup.textContent = '+' + puan;
+      popup.style.left = merkezX + 'px';
+      popup.style.top = merkezY + 'px';
+      document.body.appendChild(popup);
+
+      setTimeout(function () {
+        document.body.removeChild(popup);
+      }, 900);
+    }
+
+    // Bir blok yerleştirildikten sonra çağrılır: patlama var mı, skor/kombo ne olacak?
+    function yerlesimSonrasiKontrolEt() {
+      const patlayanlar = patlayacaklariBul();
+      const toplamPatlayan = patlayanlar.satirlar.length + patlayanlar.sutunlar.length;
+
+      if (toplamPatlayan > 0) {
+        comboSayaci++;
+        const puan = 10 * toplamPatlayan * comboSayaci; // satır/sütun sayısı x kombo çarpanı
+        skoruGuncelle(puan);
+        comboGoster(comboSayaci);
+        const patlayanHucreler = satirSutunPatlat(patlayanlar);
+        puanPopupGoster(puan, patlayanHucreler);
+      } else {
+        comboSayaci = 0;
+        comboGizle();
+      }
+    }
+
+    // ===== 12) SÜRÜKLEME MANTIĞI =====
+
+    let suruklenenSlotIndex = null;
+    let ghostEleman = null;
+    let sonAnkorSatir = null;
+    let sonAnkorSutun = null;
+    let sonGecerli = false;
+    let sonHedefHucre = null;       // performans: aynı hücredeyken tekrar hesaplama yapmamak için
+    let bekleyenKonum = null;       // performans: en son fare/dokunma konumu
+    let kareBekliyor = false;       // performans: requestAnimationFrame zaten planlandı mı
+
+    function suruklemeBaslat(e, slotIndex) {
+      if (!trayDurumu[slotIndex]) return; // slot boşsa sürüklemeyi başlatma
+      e.preventDefault();
+
+      suruklenenSlotIndex = slotIndex;
+      sonHedefHucre = null;
+      const parca = trayDurumu[slotIndex]; // { sekil, renk }
+
+      // Not: tepsideki blok artık gizlenmiyor — sürüklerken hem o yerinde
+      // hem de elinin altındaki hayalet kopya görünüyor.
+
+      ghostEleman = document.createElement('div');
+      ghostEleman.style.position = 'fixed';
+      ghostEleman.style.left = '0px';
+      ghostEleman.style.top = '0px';
+      ghostEleman.style.willChange = 'transform'; // tarayıcıya "bunu sık hareket ettireceğim" diyoruz
+      ghostEleman.style.pointerEvents = 'none'; // hayalet, altındaki hücreyi tespit etmemizi engellemesin
+      ghostEleman.style.zIndex = '1000';
+      ghostEleman.style.opacity = '0.85';
+      sekilCiz(parca.sekil, ghostEleman, HUCRE_BOYUTU, HUCRE_BOSLUK, parca.renk); // tahtadaki hücrelerle aynı boyutta VE aynı renkte çiz
+      document.body.appendChild(ghostEleman);
+
+      suruklemeHareketEttir(e);
+
+      document.addEventListener('mousemove', suruklemeHareketEttir);
+      document.addEventListener('touchmove', suruklemeHareketEttir, { passive: false });
+      document.addEventListener('mouseup', suruklemeBitir);
+      document.addEventListener('touchend', suruklemeBitir);
+    }
+
+    function suruklemeHareketEttir(e) {
+      if (suruklenenSlotIndex === null) return;
+      e.preventDefault();
+
+      // Sadece en son konumu kaydet, ağır işi requestAnimationFrame'e bırak.
+      // Fare/dokunma olayı saniyede 100+ kez tetiklenebiliyor ama ekran saniyede
+      // 60 kare çiziyor — aradaki farkı hesaba katmamak gereksiz iş yapıp kasmaya sebep oluyordu.
+      const konum = pointerKonumu(e);
+      bekleyenKonum = {
+        x: konum.x,
+        y: konum.y,
+        dokunmaModu: e.touches !== undefined && e.touches.length > 0,
+      };
+
+      if (!kareBekliyor) {
+        kareBekliyor = true;
+        requestAnimationFrame(suruklemeKareyiIsle);
+      }
+    }
+
+    function suruklemeKareyiIsle() {
+      kareBekliyor = false;
+      if (suruklenenSlotIndex === null || !bekleyenKonum) return;
+
+      const x = bekleyenKonum.x;
+      const y = bekleyenKonum.y;
+      const dikeyKaydirma = bekleyenKonum.dokunmaModu ? 60 : 0; // parmakla oynarken şekli yukarı kaydır, görünsün
+
+      const sekil = trayDurumu[suruklenenSlotIndex].sekil;
+      const satirSayisi = sekil.length;
+      const sutunSayisi = sekil[0].length;
+
+      // Hücre boyutu ekran döndürülünce/yeniden boyutlanınca değişebilir,
+      // o yüzden burada sabit bir sayı yerine HER ZAMAN güncel değeri kullanıyoruz.
+      const hucreAraligi = HUCRE_BOYUTU + HUCRE_BOSLUK;
+
+      const genislik = sutunSayisi * hucreAraligi - HUCRE_BOSLUK;
+      const yukseklik = satirSayisi * hucreAraligi - HUCRE_BOSLUK;
+      const solKenar = x - genislik / 2;
+      const ustKenar = y - yukseklik / 2 - dikeyKaydirma;
+
+      // transform: left/top yerine bunu kullanmak tarayıcının yeniden ölçüm (reflow)
+      // yapmasını engelliyor, sadece var olan görüntüyü kaydırıyor — çok daha akıcı.
+      ghostEleman.style.transform = `translate(${solKenar}px, ${ustKenar}px)`;
+
+      const hedefEleman = document.elementFromPoint(x, y - dikeyKaydirma);
+
+      // Hâlâ aynı hücrenin üstündeysek, çakışma kontrolünü tekrar yapmaya gerek yok.
+      if (hedefEleman === sonHedefHucre) return;
+      sonHedefHucre = hedefEleman;
+
+      onizlemeTemizle();
+
+      if (hedefEleman && hedefEleman.classList.contains('cell')) {
+        const merkezSatir = parseInt(hedefEleman.dataset.satir);
+        const merkezSutun = parseInt(hedefEleman.dataset.sutun);
+
+        // Şekil, üstüne geldiğimiz hücrenin etrafında ortalansın
+        const ankorSatir = merkezSatir - Math.floor(satirSayisi / 2);
+        const ankorSutun = merkezSutun - Math.floor(sutunSayisi / 2);
+
+        sonAnkorSatir = ankorSatir;
+        sonAnkorSutun = ankorSutun;
+        sonGecerli = yerlesimGecerliMi(sekil, ankorSatir, ankorSutun);
+
+        onizlemeUygula(sekil, ankorSatir, ankorSutun, sonGecerli);
+      } else {
+        sonAnkorSatir = null;
+        sonGecerli = false;
+      }
+    }
+
+    function suruklemeBitir(e) {
+      if (suruklenenSlotIndex === null) return;
+
+      onizlemeTemizle();
+      const slotElemani = slotlar[suruklenenSlotIndex];
+
+      if (sonGecerli && sonAnkorSatir !== null) {
+        const parca = trayDurumu[suruklenenSlotIndex]; // { sekil, renk }
+        sekliYerlestir(parca.sekil, sonAnkorSatir, sonAnkorSutun, parca.renk);
+
+        slotaYeniSekilVer(suruklenenSlotIndex); // boşalan slota hemen yeni blok ver
+
+        yerlesimSonrasiKontrolEt(); // patlama var mı? skor/kombo burada işleniyor
+      }
+      // geçersizse hiçbir şey yapmıyoruz: slot içeriği değişmedi, sadece tekrar görünür yaptık
+
+      document.body.removeChild(ghostEleman);
+      ghostEleman = null;
+      suruklenenSlotIndex = null;
+
+      document.removeEventListener('mousemove', suruklemeHareketEttir);
+      document.removeEventListener('touchmove', suruklemeHareketEttir);
+      document.removeEventListener('mouseup', suruklemeBitir);
+      document.removeEventListener('touchend', suruklemeBitir);
+    }
+
+    slotlar.forEach(function (slot, index) {
+      slot.addEventListener('mousedown', function (e) { suruklemeBaslat(e, index); });
+      slot.addEventListener('touchstart', function (e) { suruklemeBaslat(e, index); }, { passive: false });
+    });
+
+    // ===== 13) YENİDEN BAŞLATMA =====
+    // Tahtayı, skoru ve komboyu sıfırlayıp tepsiye yeni şekiller koyar.
+
+    function oyunuYenidenBaslat() {
+      // Tahtadaki her hücreyi tamamen temizle (dolu olsun olmasın, ne varsa sil)
+      for (let satir = 0; satir < 9; satir++) {
+        for (let sutun = 0; sutun < 9; sutun++) {
+          hucreDizisi[satir][sutun].classList.remove('filled', 'preview-valid', 'preview-invalid', 'patlayacak');
+          hucreDizisi[satir][sutun].style.background = ''; // rengi de sıfırla, yoksa eski renk yapışık kalır
+        }
+      }
+      aktifOnizlemeHucreleri = [];
+
+      skor = 0;
+      skorElemani.textContent = skor;
+
+      comboSayaci = 0;
+      comboGizle();
+
+      tepsiyiDoldur();
+    }
+
+    document.getElementById('restart-button').addEventListener('click', oyunuYenidenBaslat);
+
+    // ===== 14) OYUNU BAŞLAT =====
+
+    tepsiyiDoldur();
+  </script>
+
+</body>
+</html>
